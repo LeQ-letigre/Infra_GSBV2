@@ -5,3 +5,4 @@ Terraform/terraform.tfstate
 Terraform/terraform.tfstate.backup
 Terraform/.terraform.tfstate.lock.info
 .vscode/
+.DS_Store

@@ -23,7 +23,12 @@ PM_API="https://172.16.0.253:8006/api2/json"
 TOKEN_USER="terraform-prov@pam"
 TOKEN_NAME="auto-token"
 USER_ROLE="Administrator"
-GITHUB_REPO="https://github.com/LeQ-letigre/Infra_GSB.git"
+GITHUB_REPO="https://github.com/LeQ-letigre/Infra_GSBV2.git"
+
+
+# Création des bridges Linuxs 
+
+
 
 # 1) Télécharger la backup du win srv 2022
 if [ ! -f /var/lib/vz/dump/vzdump-qemu-101-2025_09_13-14_41_02.vma.zst ]; then
@@ -109,6 +114,30 @@ pct create $CTID "$LXC_TEMPLATE" \
   -unprivileged 0
 echo "[+] Démarrage du conteneur..."
 pct start $CTID
+
+# 3.5 Création des bridges Linuxs 
+cat >> /etc/network/interfaces <<'EOF'
+
+auto vmbr2
+iface vmbr2 inet static
+        address 10.10.0.6/28
+        bridge-ports eno2
+        bridge-stp off
+        bridge-fd 0
+        bridge-vlan-aware yes
+        bridge-vids 2-4094
+
+auto Sync
+iface Sync inet manual
+        bridge-ports none
+        bridge-stp off
+        bridge-fd 0
+EOF
+
+echo "[+] Bridges vmbr2 et Sync configurés dans /etc/network/interfaces."
+ifreload -a
+echo "[+] Interfaces rechargées."
+
 
 # === 4. Attente que le conteneur soit up ===
 echo "[+] Attente du démarrage du conteneur..."
