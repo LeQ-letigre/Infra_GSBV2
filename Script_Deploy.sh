@@ -286,6 +286,9 @@ target_node             = "$node"
 chemin_cttemplate       = "$CHEMIN_TEMPLATE"
 EOT
 
+echo "[+] Création du dossier pour les clés SSH Ansible..."
+mkdir -p ~/etc/ansible/keys
+
 cd /Infra_GSBV2/Terraform
 terraform init
 terraform apply -auto-approve
@@ -293,6 +296,71 @@ terraform apply -auto-approve
 echo "[+] Attente que les machines 172.16.0.2 et 172.16.0.1 soient en ligne..."
 while ! ping -c 1 -W 1 172.16.0.2 > /dev/null 2>&1; do sleep 1; done
 while ! ping -c 1 -W 1 172.16.0.1 > /dev/null 2>&1; do sleep 1; done
+
+EOF
+
+# === 9. Configuration Docker pour les conteneurs LXC ===
+echo "[+] Configuration Docker pour les conteneurs LXC..."
+
+# Liste des conteneurs LXC qui nécessitent Docker
+DOCKER_LXC_LIST=(113 114 115)
+
+for CT in "${DOCKER_LXC_LIST[@]}"; do
+  if pct status "$CT" &>/dev/null; then
+    echo "[+] Configuration de Docker pour le conteneur LXC $CT..."
+
+    # Arrêt du conteneur pour modifier la configuration
+    pct stop "$CT" 2>/dev/null || true
+
+    # Ajout des configurations Docker dans le fichier de conf du LXC
+    LXC_CONF="/etc/pve/lxc/${CT}.conf"
+
+    # Vérification si la configuration n'est pas déjà présente
+    if ! grep -q "lxc.apparmor.profile=unconfined" "$LXC_CONF"; then
+      echo "lxc.apparmor.profile=unconfined" >> "$LXC_CONF"
+      echo "lxc.cap.drop=" >> "$LXC_CONF"
+      echo "lxc.cgroup2.devices.allow=a" >> "$LXC_CONF"
+      echo "lxc.mount.auto=proc:rw sys:rw" >> "$LXC_CONF"
+      echo "[✔] Configuration Docker ajoutée pour le conteneur $CT"
+    else
+      echo "[!] Configuration Docker déjà présente pour le conteneur $CT"
+    fi
+
+    # Redémarrage du conteneur
+    pct start "$CT"
+    echo "[✔] Conteneur $CT redémarré avec la configuration Docker"
+  else
+    echo "[!] Conteneur $CT non trouvé, configuration ignorée"
+  fi
+done
+
+# === 9b. Attente de la connectivité réseau des conteneurs ===
+echo "[+] Attente de la connectivité réseau des conteneurs LXC..."
+# Attendre un peu que les conteneurs démarrent
+sleep 5
+
+for CT in "${DOCKER_LXC_LIST[@]}"; do
+  if pct status "$CT" 2>/dev/null | grep -q "running"; then
+    echo "[+] Test de connectivité réseau pour le conteneur $CT..."
+    # Attendre que le conteneur puisse résoudre DNS et accéder à Internet
+    until pct exec "$CT" -- ping -c 1 -W 2 8.8.8.8 &>/dev/null; do
+      echo "  ⏳ En attente de la connectivité réseau du conteneur $CT..."
+      sleep 2
+    done
+    echo "[✔] Conteneur $CT a une connectivité réseau fonctionnelle"
+  fi
+done
+
+# === 10. Retour dans le conteneur terransible pour Ansible ===
+echo "[+] Connexion au conteneur terransible pour déploiement Ansible..."
+
+ssh -T -o StrictHostKeyChecking=no -i "$SSH_KEY_PATH" root@"$IP" <<EOF
+
+#!/bin/bash
+set -e
+
+echo "[+] Activation du venv Ansible..."
+source ~/venvs/ansible/bin/activate
 
 cd ../Ansible
 ansible-galaxy install -r requirements.yml

@@ -10,7 +10,7 @@ resource "local_file" "private_key" {
   for_each = var.lxc_linux
 
  content  = tls_private_key.lxc_ssh_key[each.key].private_key_openssh
- filename = pathexpand("~/.ssh/${each.value.name}-ed25519")
+ filename = pathexpand("~/etc/ansible/keys/${each.value.name}")
  file_permission = "0600"
 }
 
