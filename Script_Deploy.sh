@@ -26,6 +26,30 @@ USER_ROLE="Administrator"
 GITHUB_REPO="https://github.com/LeQ-letigre/Infra_GSBV2.git"
 
 
+# 0.5 Téléchgement des templates OpnSenses
+
+if [ ! -f /var/lib/vz/dump/opnsense-master.vma.zst ]; then
+  wget -O /var/lib/vz/dump/opnsense-master.vma.zst https://m2shelper.boisloret.fr/scripts/deploy-infra-gsb/opnsense-master.vma.zst
+fi
+
+if [ ! -f /var/lib/vz/dump/opnsense-backup.vma.zst ]; then
+  wget -O /var/lib/vz/dump/opnsense-backup.vma.zst https://m2shelper.boisloret.fr/scripts/deploy-infra-gsb/opnsense-backup.vma.zst
+fi
+
+# 2) Restaurer les OpnSenses
+qmrestore /var/lib/vz/dump/opnsense-master.vma.zst  2100 --storage local-lvm --unique 1
+qm set 2100 --name "OpnSense-Master-Template"
+ 
+# 3) Marquer en template
+qm template 2100
+
+# 2) Restaurer les OpnSenses
+qmrestore /var/lib/vz/dump/opnsense-backup.vma.zst  2101 --storage local-lvm --unique 1
+qm set 2101 --name "OpnSense-Backup-Template"
+ 
+# 3) Marquer en template
+qm template 2101
+
 
 # 1) Télécharger la backup du win srv 2022
 if [ ! -f /var/lib/vz/dump/vzdump-qemu-101-2025_09_13-14_41_02.vma.zst ]; then
@@ -243,10 +267,10 @@ command -v terraform >/dev/null || { echo "❌ Terraform n’est pas installé c
 echo "✅ VM terransible prête : Ansible, Terraform, Locales, Git et Alias configurés."
 
 echo "[+] Clonage du dépôt Git..."
-git clone "\$GITHUB_REPO" /Infra_GSB || { echo "❌ Clone Git échoué"; exit 1; }
+git clone "\$GITHUB_REPO" /Infra_GSBV2 || { echo "❌ Clone Git échoué"; exit 1; }
 
 echo "[+] Écriture du fichier secrets.auto.tfvars..."
-cat <<EOT > /Infra_GSB/Terraform/secrets.auto.tfvars
+cat <<EOT > /Infra_GSBV2/Terraform/secrets.auto.tfvars
 proxmox_api_url         = "$PM_API"
 proxmox_api_token_id    = "$TOKEN_USER!$TOKEN_NAME"
 proxmox_api_token       = "$TF_TOKEN_SECRET"
@@ -254,7 +278,7 @@ target_node             = "$node"
 chemin_cttemplate       = "$CHEMIN_TEMPLATE"
 EOT
 
-cd /Infra_GSB/Terraform
+cd /Infra_GSBV2/Terraform
 terraform init
 terraform apply -auto-approve
 

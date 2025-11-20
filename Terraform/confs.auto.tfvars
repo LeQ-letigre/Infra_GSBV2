@@ -56,12 +56,12 @@ opnsenses = {
   "OPNsense-Master" = {
     name = "OPNsense-Master"
     vmid = 301
-    opnsense_template = "OPNsenseMaster"
+    opnsense_template = "OpnSense-Master-Template"
     }
 
   "OPNsense-Backup" = {
     name = "OPNsense-Backup"
     vmid = 302
-    opnsense_template = "OPNsenseBackup"  
+    opnsense_template = "OpnSense-Backup-Template"  
   }
 }
