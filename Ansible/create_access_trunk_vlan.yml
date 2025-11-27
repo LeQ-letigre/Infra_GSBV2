@@ -1,0 +1,51 @@
+- name: Créer un Vlan sur les switchs (un seul, ou les 2)
+  hosts: "{{ target_switch | default('switchs') }}"
+  gather_facts: no
+  tasks:
+    
+    - name: Vérifier la présence du vlan
+      fail:
+        msg: "Le vlan n'est pas défini dans les variables."
+      when: vlan_id is not defined
+      
+    - name: Créer le vlan sur le ou les switchs
+      ansible.netcommon.cli_command:
+        command: |
+          configure 
+          vlan {{ vlan_id }}
+          {% if vlan_name is defined %}
+          name {{ vlan_name }}
+          {% endif %}
+          exit
+
+    - name: Assigner les ports en mode access par switch 
+      ansible.netcommon.cli_command:
+        command: |
+          configure
+          interface {{ item }}
+          switchport mode access
+          switchport access vlan {{ vlan_id }}
+          no shutdown
+          exit
+      loop: "{{ access_ports[inventory_hostname] | default([]) }}"
+      loop_control:
+        label: "{{ inventory_hostname }} - Port {{ item }} -> Vlan {{ vlan_id }}"
+      when: 
+        - access_ports is defined
+        - inventory_hostname in access_ports
+
+    - name: Assigner les ports en mode trunk par switch 
+      ansible.netcommon.cli_command:
+        command: |
+          configure
+          interface {{ item }}
+          switchport mode trunk
+          switchport trunk allowed vlan add {{ vlan_id }}
+          no shutdown
+          exit
+      loop: "{{ trunk_ports[inventory_hostname] | default([]) }}"
+      loop_control:
+        label: "{{ inventory_hostname }} - Port {{ item }} -> Vlan {{ vlan_id }}"
+      when: 
+        - trunk_ports is defined
+        - inventory_hostname in trunk_ports

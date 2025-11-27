@@ -14,7 +14,18 @@ all:
          ansible_host: 172.16.0.5
          ansible_user: root
          ansible_ssh_private_key_file: /etc/ansible/keys/GLPI
-   
+    
+    switchs:
+      hosts:
+        Sw01:
+          ansible_host: 10.10.0.3
+          ansible_user: admin
+          ansible_password: "Formation13@"
+        Sw02:
+          ansible_host: 10.10.0.4
+          ansible_user: admin
+          ansible_password: "Formation13@"
+
     winservers:
       hosts:
         WinSRV01:
