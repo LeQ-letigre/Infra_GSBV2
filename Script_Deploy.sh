@@ -263,6 +263,8 @@ echo "🔗 Ajout d’un alias global dans ~/.bashrc pour ansible et ansible-play
 if ! grep -q "venvs/ansible" ~/.bashrc; then
   echo 'ansible() { source ~/venvs/ansible/bin/activate && command ansible "\$@"; }' >> ~/.bashrc
   echo 'ansile-playbook() { source ~/venvs/ansible/bin/activate && command ansible-playbook "\$@"; }' >> ~/.bashrc
+  echo 'ansible-galaxy() { source ~/venvs/ansible/bin/activate && command ansible-galaxy "\$@"; }' >> ~/.bashrc
+
 fi
 
 wget -O- https://apt.releases.hashicorp.com/gpg | gpg --dearmor > /usr/share/keyrings/hashicorp-archive-keyring.gpg
