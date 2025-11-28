@@ -1,6 +1,6 @@
 - name: Vérifier si AdGuard existe 
   ansible.builtin.stat:
-    path: /opt/AdGuardHome/AdGuardHome
+    path: /tmp/AdGuardHome/AdGuardHome
   register: __adguard_check
 
 - name: Télécharger AdGuard
