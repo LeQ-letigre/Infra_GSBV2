@@ -23,6 +23,18 @@ all:
           ansible_password: "Formation13@"
           ansible_connection: network_cli
           ansible_network_os: vyos
+
+    switchs:
+      hosts:
+        Sw01:
+          ansible_host: 10.10.0.3
+          ansible_user: admin
+          ansible_password: "Formation13@"
+        Sw02:
+          ansible_host: 10.10.0.4
+          ansible_user: admin
+          ansible_password: "Formation13@"
+
     winservers:
       hosts:
         WinSRV01:
