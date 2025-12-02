@@ -5,7 +5,7 @@ set -e
 # === CONFIG ===
 CTID=110
 CT_LIST=(110 113 114 115)
-VM_LIST=(201 202)
+VM_LIST=(201 202 301 302)
 CTNAME="terransible"
 HOSTNAME="terransible"
 IP="172.16.0.15"
@@ -40,8 +40,8 @@ if qm status 2100 &>/dev/null; then
     qm destroy 2100 --purge
 fi
 
-if pct status 2101 &>/dev/null; then
-    pct destroy 2101
+if qm status 2101 &>/dev/null; then
+    qm destroy 2101 --purge
 fi
 
 # 2) Restaurer les OpnSenses
@@ -168,6 +168,11 @@ EOF
 echo "[+] Bridges vmbr2 et Sync configurés dans /etc/network/interfaces."
 ifreload -a
 echo "[+] Interfaces rechargées."
+
+echo "[+] Activation des bridges vmbr2 et Sync..."
+ifup vmbr2
+ifup Sync
+echo "[+] Bridges activés."
 
 
 # === 4. Attente que le conteneur soit up ===
