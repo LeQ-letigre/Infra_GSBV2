@@ -49,3 +49,17 @@
     - name: Afficher le résultat de la configuration DHCP
       ansible.builtin.debug:
         msg: "DHCP configuré sur {{ subnet_dhcp }} - Plage: {{ dhcp_start }} - {{ dhcp_stop }}, Gateway: {{ dhcp_gateway }}, DNS: {{ dhcp_dns }}"
+
+    - name: Attacher le ruleset INTERVLAN_POLICY sur la VIF
+      vyos.vyos.vyos_command:
+        commands:
+          - configure
+          - set interfaces ethernet eth1 vif {{ id_vif }} firewall in INTERVLAN_POLICY
+          - commit
+          - save
+          - exit
+      register: firewall_output
+
+    - name: Afficher le résultat de l'attachement du firewall
+      ansible.builtin.debug:
+        msg: "Ruleset INTERVLAN_POLICY attaché en IN sur eth1.{{ id_vif }}"
