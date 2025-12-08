@@ -1,0 +1,62 @@
+services:
+  glpi_db:
+    image: mariadb:{{ mariadb_version }}
+    container_name: glpi_db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: {{ glpi_mysql_root_password }}
+      MYSQL_DATABASE: {{ glpi_mysql_db }}
+      MYSQL_USER: {{ glpi_mysql_user }}
+      MYSQL_PASSWORD: {{ glpi_mysql_password }}
+    volumes:
+      - glpi_db_data:/var/lib/mysql
+    networks:
+      - glpi_net
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      start_period: 60s
+      start_interval: 10s
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  glpi:
+    image: glpi/glpi:{{ glpi_version }}
+    container_name: glpi
+    restart: unless-stopped
+    ports:
+      - "{{ glpi_port }}:80"
+    environment:
+      GLPI_DB_HOST: glpi_db
+      GLPI_DB_PORT: 3306
+      GLPI_DB_NAME: {{ glpi_mysql_db }}
+      GLPI_DB_USER: {{ glpi_mysql_user }}
+      GLPI_DB_PASSWORD: {{ glpi_mysql_password }}
+      TIMEZONE: {{ glpi_timezone }}
+    volumes:
+      - glpi_config:/var/www/html/config
+      - glpi_files:/var/www/html/files
+      - glpi_marketplace:/var/www/html/marketplace
+      - glpi_plugins:/var/www/html/plugins
+    depends_on:
+      glpi_db:
+        condition: service_healthy
+    networks:
+      - glpi_net
+
+volumes:
+  glpi_db_data:
+    name: glpi_db_data
+  glpi_config:
+    name: glpi_config
+  glpi_files:
+    name: glpi_files
+  glpi_marketplace:
+    name: glpi_marketplace
+  glpi_plugins:
+    name: glpi_plugins
+
+networks:
+  glpi_net:
+    name: glpi_net
+    driver: bridge

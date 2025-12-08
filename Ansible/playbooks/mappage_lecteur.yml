@@ -8,9 +8,9 @@
       ansible.builtin.assert:
         that:
           - folder_name is defined
-          - ad_group is defined
+          - ou_name is defined
           - drive_letter is defined
-        fail_msg: "Erreur : Les variables folder_name, ad_group et drive_letter doivent être définies"
+        fail_msg: "Erreur : Les variables folder_name, ou_name et drive_letter doivent être définies"
 
     - name: Vérifier que la lettre de lecteur est valide
       ansible.builtin.assert:
@@ -21,9 +21,9 @@
 
     - name: Construire les variables
       ansible.builtin.set_fact:
-        gpo_name: "Map_{{ folder_name }}_{{ ad_group }}"
+        gpo_name: "Map_{{ folder_name }}_{{ ou_name }}"
         unc_path: "\\\\{{ server_ip | default('172.16.0.1') }}\\{{ folder_name }}"
-        ou_path: "{{ ou_name is defined | ternary('OU=' + ou_name + ',DC=gsb,DC=local', 'DC=gsb,DC=local') }}"
+        ou_path: "OU={{ ou_name }},DC=gsb,DC=local"
 
     - name: Afficher les informations de la GPO
       ansible.builtin.debug:
@@ -32,7 +32,7 @@
           - Nom : {{ gpo_name }}
           - Lecteur : {{ drive_letter }}:
           - Chemin : {{ unc_path }}
-          - Groupe cible : {{ ad_group }}
+          - OU cible : {{ ou_name }}
 
     - name: Créer la GPO pour le mappage de lecteur
       ansible.windows.win_shell: |
@@ -43,7 +43,7 @@
 
         if (-not $gpoExists) {
             # Créer la nouvelle GPO
-            $gpo = New-GPO -Name "{{ gpo_name }}" -Comment "Mappage automatique du lecteur {{ drive_letter }}: pour le groupe {{ ad_group }}"
+            $gpo = New-GPO -Name "{{ gpo_name }}" -Comment "Mappage automatique du lecteur {{ drive_letter }}: pour l'OU {{ ou_name }}"
             Write-Output "GPO_CREATED:{{ gpo_name }}"
         } else {
             $gpo = $gpoExists
@@ -86,7 +86,7 @@
         dest: "\\\\{{ ansible_host }}\\SYSVOL\\gsb.local\\Policies\\{{ '{' }}{{ gpo_guid }}{{ '}' }}\\User\\Preferences\\Drives\\Drives.xml"
       register: xml_creation
 
-    - name: Lier la GPO à l'OU du groupe
+    - name: Lier la GPO à l'OU
       ansible.windows.win_shell: |
         Import-Module GroupPolicy
 
@@ -105,9 +105,8 @@
             Write-Output "GPO_ALREADY_LINKED:$ouPath"
         }
       register: gpo_link
-      when: ou_name is defined
 
-    - name: Configurer le filtrage de sécurité pour le groupe AD
+    - name: Configurer le filtrage de sécurité (optionnel)
       ansible.windows.win_shell: |
         Import-Module GroupPolicy
         $gpoName = "{{ gpo_name }}"
@@ -116,6 +115,7 @@
         Set-GPPermission -Name $gpoName -TargetName $groupName -TargetType Group -PermissionLevel GpoApply
         Write-Output "SECURITY_FILTERING_CONFIGURED:$groupName"
       register: gpo_security
+      when: ad_group is defined
 
     - name: Forcer la mise à jour de la GPO
       ansible.windows.win_shell: |
@@ -133,18 +133,18 @@
           ├─ Nom GPO        : {{ gpo_name }}
           ├─ Lecteur mappé  : {{ drive_letter }}:
           ├─ Chemin réseau  : {{ unc_path }}
-          ├─ Groupe cible   : {{ ad_group }}
-          {% if ou_name is defined %}├─ OU liée        : {{ ou_name }}{% endif %}
+          ├─ OU cible       : {{ ou_name }}
+          {% if ad_group is defined %}├─ Groupe filtré  : {{ ad_group }}{% endif %}
 
 
           ✅ Configuration appliquée :
           ├─ Mappage persistant activé
-          ├─ Filtrage de sécurité configuré pour {{ ad_group }}
-          {% if ou_name is defined %}├─ GPO liée à l'OU {{ ou_name }}{% endif %}
+          ├─ GPO liée à l'OU {{ ou_name }}
+          {% if ad_group is defined %}├─ Filtrage de sécurité configuré pour {{ ad_group }}{% else %}├─ Appliquée à tous les utilisateurs de l'OU{% endif %}
 
 
           🔄 Pour appliquer sur les clients :
-          ├─ Les utilisateurs du groupe {{ ad_group }} recevront le lecteur au prochain logon
+          {% if ad_group is defined %}├─ Les utilisateurs du groupe {{ ad_group }} dans l'OU {{ ou_name }} recevront le lecteur au prochain logon{% else %}├─ Tous les utilisateurs de l'OU {{ ou_name }} recevront le lecteur au prochain logon{% endif %}
           ├─ Pour forcer immédiatement : gpupdate /force sur le client
           ├─ Le lecteur {{ drive_letter }}: pointera vers {{ unc_path }}
 

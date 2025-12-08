@@ -1,0 +1,57 @@
+---
+# Configuration LDAP automatique pour GLPI
+# Ce fichier configure l'authentification LDAP/Active Directory dans GLPI
+
+- name: Attendre que GLPI soit complètement démarré
+  ansible.builtin.wait_for:
+    timeout: 10
+  delegate_to: localhost
+
+- name: Vérifier si la configuration LDAP existe déjà
+  community.docker.docker_container_exec:
+    container: glpi_db
+    command: >
+      mysql -u {{ glpi_mysql_user }} -p{{ glpi_mysql_password }} {{ glpi_mysql_db }}
+      -e "SELECT COUNT(*) FROM glpi_authldaps WHERE name='{{ glpi_ldap_name }}';"
+  register: ldap_check
+  changed_when: false
+  failed_when: false
+
+- name: Insérer la configuration LDAP dans la base de données
+  community.docker.docker_container_exec:
+    container: glpi_db
+    command: >
+      mysql -u {{ glpi_mysql_user }} -p{{ glpi_mysql_password }} {{ glpi_mysql_db }}
+      -e "INSERT INTO glpi_authldaps (
+            name, host, port, basedn, rootdn, rootdn_passwd,
+            login_field, use_tls, is_active, is_default, date_creation, date_mod
+          ) VALUES (
+            '{{ glpi_ldap_name }}',
+            '{{ glpi_ldap_host }}',
+            {{ glpi_ldap_port }},
+            '{{ glpi_ldap_basedn }}',
+            '{{ glpi_ldap_rootdn }}',
+            '{{ glpi_ldap_password }}',
+            '{{ glpi_ldap_login_field }}',
+            {{ '1' if glpi_ldap_use_tls else '0' }},
+            1,
+            1,
+            NOW(),
+            NOW()
+          ) ON DUPLICATE KEY UPDATE
+            host = '{{ glpi_ldap_host }}',
+            port = {{ glpi_ldap_port }},
+            basedn = '{{ glpi_ldap_basedn }}',
+            rootdn = '{{ glpi_ldap_rootdn }}',
+            rootdn_passwd = '{{ glpi_ldap_password }}',
+            use_tls = {{ '1' if glpi_ldap_use_tls else '0' }},
+            date_mod = NOW();"
+  when: ldap_check.stdout is defined
+
+- name: Afficher le statut de la configuration LDAP
+  ansible.builtin.debug:
+    msg:
+      - "Configuration LDAP appliquée avec succès"
+      - "Serveur: {{ glpi_ldap_host }}:{{ glpi_ldap_port }}"
+      - "Base DN: {{ glpi_ldap_basedn }}"
+      - "TLS: {{ 'Activé' if glpi_ldap_use_tls else 'Désactivé' }}"

@@ -1,5 +1,33 @@
-mariadb_version: 10.6
-glpi_mysql_root_password: root
-glpi_mysql_db: glpi
-glpi_mysql_user: glpi
-glpi_mysql_password: glpi
+---
+# GLPI Version Configuration
+glpi_version: "11.0.2"
+glpi_port: "8080"
+glpi_timezone: "Europe/Paris"
+
+# MariaDB Version
+mariadb_version: "11.0"
+
+# Database Configuration
+glpi_mysql_root_password: "Formation13@"
+glpi_mysql_db: "glpi"
+glpi_mysql_user: "glpi"
+glpi_mysql_password: "Formation13@"
+
+# GLPI Initial Admin Account (pour première connexion)
+glpi_admin_user: "glpi"
+glpi_admin_password: "Formation13@"
+
+# LDAP Configuration (optionnel - mettre glpi_ldap_enabled: true pour activer)
+glpi_ldap_enabled: false
+glpi_ldap_name: "Active Directory GSB"
+glpi_ldap_host: "ad.gsb.local"
+glpi_ldap_port: 636
+glpi_ldap_basedn: "DC=gsb,DC=local"
+glpi_ldap_rootdn: "CN=glpi_bind,OU=Service Accounts,DC=gsb,DC=local"
+glpi_ldap_password: "Formation13@"
+glpi_ldap_use_tls: true
+glpi_ldap_login_field: "samaccountname"
+
+# Backup Configuration
+glpi_backup_enabled: false
+glpi_backup_retention_days: 7

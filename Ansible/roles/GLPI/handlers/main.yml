@@ -1,5 +1,5 @@
-- name: Redémarrer Apache
-  service:
-    name: apache2
+---
+- name: Redémarrer GLPI
+  community.docker.docker_compose_v2:
+    project_src: /opt/glpi
     state: restarted
-    enabled: yes

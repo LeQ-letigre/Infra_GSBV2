@@ -1,62 +1,99 @@
-- name: Créer les dossiers pour les volumes Docker
+---
+- name: Créer le dossier GLPI
   ansible.builtin.file:
-    path: "{{ item }}"
+    path: /opt/glpi
     state: directory
-    owner: "root"
-    group: "root"
-    mode: "0755"
-  loop:
-    - /opt/glpi/db_data
-    - /opt/glpi/html
+    mode: '0755'
 
-- name: Créer le réseau Docker pour GLPI
-  community.docker.docker_network:
-    name: glpi_net
-    driver: bridge
+- name: Vérifier présence du docker-compose dans /opt/glpi
+  ansible.builtin.stat:
+    path: /opt/glpi/docker-compose.yml
+  register: docker_compose_check
 
-- name: Lancer MariaDB pour GLPI 
-  community.docker.docker_container:
-    name: glpi_db 
-    image: mariadb:{{ mariadb_version }}
-    state: started
-    restart_policy: always
-    env:
-      MYSQL_ROOT_PASSWORD: "root"
-      MYSQL_DATABASE: "glpi"
-      MYSQL_USER: "glpi"
-      MYSQL_PASSWORD: "glpi"
-    volumes:
-      - /opt/glpi/db_data:/var/lib/mysql
-    networks:
-      - name: glpi_net
+- name: Déployer le docker-compose.yml
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: /opt/glpi/docker-compose.yml
+    mode: '0644'
+  notify: Redémarrer GLPI
 
-- name: Lancer GLPI (web)
-  community.docker.docker_container:
-    name: glpi_web
-    image: diouxx/glpi
-    state: started
-    restart_policy: always
-    ports:
-      - "80:80"
-    volumes:
-      - /opt/glpi/html:/var/www/html
-    env:
-      TIMEZONE: Europe/Paris
-    networks:
-      - name: glpi_net
+- name: Lancer GLPI avec docker-compose
+  community.docker.docker_compose_v2:
+    project_src: /opt/glpi
+    state: present
 
-- name: Supprimer le fichier install.php de GLPI
-  file:
-    path: /opt/glpi/html/install/install.php
-    state: absent
+- name: Attendre que la base de données soit prête
+  ansible.builtin.wait_for:
+    timeout: 30
+  delegate_to: localhost
 
-- name: Copier le dump SQL dans la VM GLPI
-  copy:
-    src: files/glpi.sql
-    dest: /opt/glpi/glpi.sql
+- name: Vérifier si GLPI est déjà installé
+  community.docker.docker_container_exec:
+    container: glpi
+    command: php bin/console db:check
+  register: glpi_check
+  failed_when: false
+  changed_when: false
 
-- name: Injecter la base GLPI via docker exec
-  ansible.builtin.shell: |
-    docker exec -i glpi_db mysql -u glpi -pglpi glpi < /opt/glpi/glpi.sql
+- name: Installer GLPI via CLI (première installation)
+  community.docker.docker_container_exec:
+    container: glpi
+    command: >
+      php bin/console db:install
+      --db-host=glpi_db
+      --db-name={{ glpi_mysql_db }}
+      --db-user={{ glpi_mysql_user }}
+      --db-password={{ glpi_mysql_password }}
+      --default-language=fr_FR
+      --no-interaction
+  when: glpi_check.rc != 0
+  register: glpi_install
 
+- name: Mettre à jour la base de données GLPI (si nécessaire)
+  community.docker.docker_container_exec:
+    container: glpi
+    command: php bin/console db:update --no-interaction
+  when: glpi_check.rc == 0
+  register: glpi_update
+  failed_when:
+    - glpi_update.rc != 0
+    - "'No migration needed' not in glpi_update.stdout"
 
+- name: Attendre que GLPI soit complètement initialisé
+  ansible.builtin.wait_for:
+    timeout: 10
+  delegate_to: localhost
+  when: glpi_install.changed or glpi_update.changed
+
+- name: Changer le mot de passe admin glpi via SQL
+  community.docker.docker_container_exec:
+    container: glpi_db
+    command: >
+      bash -c "mariadb -u {{ glpi_mysql_user }} -p{{ glpi_mysql_password }} {{ glpi_mysql_db }}
+      -e \"UPDATE glpi_users SET password=MD5('{{ glpi_admin_password }}') WHERE name='glpi';\""
+  when: glpi_admin_password != 'glpi'
+  register: password_change
+  failed_when: false
+
+- name: Configurer LDAP si activé
+  ansible.builtin.include_tasks: configure_ldap.yml
+  when: glpi_ldap_enabled | default(false)
+
+- name: Configurer le cron GLPI
+  ansible.builtin.cron:
+    name: "GLPI automatic actions"
+    minute: "*"
+    job: "docker exec glpi php /var/www/html/front/cron.php >/dev/null 2>&1"
+    user: root
+    state: present
+
+- name: Afficher les informations de connexion
+  ansible.builtin.debug:
+    msg:
+      - "=========================================="
+      - "GLPI est déployé avec succès !"
+      - "URL: http://{{ ansible_host }}:{{ glpi_port }}"
+      - "Utilisateur par défaut: {{ glpi_admin_user }}"
+      - "Mot de passe par défaut: {{ glpi_admin_password }}"
+      - "=========================================="
+      - "IMPORTANT: Changez le mot de passe après la première connexion !"

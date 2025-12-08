@@ -5,7 +5,7 @@ set -e
 # === CONFIG ===
 CTID=110
 CT_LIST=(110 113 114 115)
-VM_LIST=(201 202)
+VM_LIST=(201 202 301 302)
 CTNAME="terransible"
 HOSTNAME="terransible"
 IP="172.16.0.15"
@@ -40,8 +40,8 @@ if qm status 2100 &>/dev/null; then
     qm destroy 2100 --purge
 fi
 
-if pct status 2101 &>/dev/null; then
-    pct destroy 2101
+if qm status 2101 &>/dev/null; then
+    qm destroy 2101 --purge
 fi
 
 # 2) Restaurer les OpnSenses
@@ -168,6 +168,13 @@ EOF
 echo "[+] Bridges vmbr2 et Sync configurés dans /etc/network/interfaces."
 ifreload -a
 echo "[+] Interfaces rechargées."
+
+
+# === 4. Attente que le conteneur soit up ===
+echo "[+] Attente du démarrage du conteneur..."
+while ! ping -c 1 -W 1 "$IP" > /dev/null 2>&1; do
+    sleep 1
+done
 
 # === 5. Injection de la clé SSH ===
 echo "[+] Injection de la clé SSH dans le conteneur..."
@@ -317,6 +324,7 @@ for CT in "${DOCKER_LXC_LIST[@]}"; do
       echo "lxc.cap.drop=" >> "$LXC_CONF"
       echo "lxc.cgroup2.devices.allow=a" >> "$LXC_CONF"
       echo "lxc.mount.auto=proc:rw sys:rw" >> "$LXC_CONF"
+      echo "features: nesting=1,keyctl=1" >> "$LXC_CONF"
       echo "[✔] Configuration Docker ajoutée pour le conteneur $CT"
     else
       echo "[!] Configuration Docker déjà présente pour le conteneur $CT"
