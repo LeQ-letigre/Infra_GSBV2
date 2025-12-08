@@ -22,7 +22,7 @@ node=$(hostname)
 PM_API="https://172.16.0.253:8006/api2/json"
 TOKEN_USER="terraform-prov@pam"
 TOKEN_NAME="auto-token"
-USER_ROLE="Administrator"
+USER_ROLE="PVEAdmin"
 GITHUB_REPO="https://github.com/LeQ-letigre/Infra_GSBV2.git"
 
 
@@ -168,13 +168,6 @@ EOF
 echo "[+] Bridges vmbr2 et Sync configurés dans /etc/network/interfaces."
 ifreload -a
 echo "[+] Interfaces rechargées."
-
-
-# === 4. Attente que le conteneur soit up ===
-echo "[+] Attente du démarrage du conteneur..."
-while ! ping -c 1 -W 1 "$IP" > /dev/null 2>&1; do
-    sleep 1
-done
 
 # === 5. Injection de la clé SSH ===
 echo "[+] Injection de la clé SSH dans le conteneur..."
