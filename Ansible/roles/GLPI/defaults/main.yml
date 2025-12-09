@@ -1,7 +1,7 @@
 ---
 # GLPI Version Configuration
 glpi_version: "11.0.2"
-glpi_port: "8080"
+glpi_port: "80"
 glpi_timezone: "Europe/Paris"
 
 # MariaDB Version
