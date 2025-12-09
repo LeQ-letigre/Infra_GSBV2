@@ -106,16 +106,9 @@
         }
       register: gpo_link
 
-    - name: Configurer le filtrage de sécurité (optionnel)
-      ansible.windows.win_shell: |
-        Import-Module GroupPolicy
-        $gpoName = "{{ gpo_name }}"
-        $groupName = "{{ ad_group }}"
-        Set-GPPermission -Name $gpoName -TargetName 'Authenticated Users' -TargetType Group -PermissionLevel None -Replace
-        Set-GPPermission -Name $gpoName -TargetName $groupName -TargetType Group -PermissionLevel GpoApply
-        Write-Output "SECURITY_FILTERING_CONFIGURED:$groupName"
-      register: gpo_security
-      when: ad_group is defined
+    - name: Afficher le mode de filtrage
+      ansible.builtin.debug:
+        msg: "GPO appliquée à toute l'OU {{ ou_name }} (Utilisateurs authentifiés par défaut)"
 
     - name: Forcer la mise à jour de la GPO
       ansible.windows.win_shell: |

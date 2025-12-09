@@ -1,3 +1,12 @@
+- name: Renommer le serveur en WinSRV01
+  win_hostname:
+    name: WinSRV01
+  register: rename_result
+
+- name: Redémarrer si le nom a changé
+  win_reboot:
+  when: rename_result.reboot_required
+
 - name: Installer le rôle ADDS
   win_feature:
     name: AD-Domain-Services
