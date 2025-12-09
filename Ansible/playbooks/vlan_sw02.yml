@@ -1,11 +1,9 @@
 ---
-- name: Configuration des VLANs sur les switchs Planet
-  hosts: switchs
+- name: Configuration VLAN sur Sw02
+  hosts: Sw02
   gather_facts: no
-  serial: 1  # IMPORTANT: Une seule connexion SSH a la fois
 
   vars:
-    lock_file: "/tmp/switch_ansible.lock"
     ansible_ssh_common_args: '-o ControlMaster=no'
 
   tasks:
@@ -15,24 +13,22 @@
           - vlan_id is defined
           - vlan_name is defined
         fail_msg: "Erreur : Les variables vlan_id et vlan_name doivent etre definies"
-      run_once: true
-      delegate_to: localhost
 
-    - name: Determiner les ports pour ce switch
+    - name: Parser les ports access et trunk
       ansible.builtin.set_fact:
-        my_access_ports: "{{ (lookup('vars', inventory_hostname + '_access', default='[]') | from_json) if lookup('vars', inventory_hostname + '_access', default='[]') is string else lookup('vars', inventory_hostname + '_access', default=[]) }}"
-        my_trunk_ports: "{{ (lookup('vars', inventory_hostname + '_trunk', default='[]') | from_json) if lookup('vars', inventory_hostname + '_trunk', default='[]') is string else lookup('vars', inventory_hostname + '_trunk', default=[]) }}"
+        access_ports: "{{ (access_ports | from_json) if access_ports is string else (access_ports | default([])) }}"
+        trunk_ports: "{{ (trunk_ports | from_json) if trunk_ports is string else (trunk_ports | default([])) }}"
 
     - name: Afficher les informations du VLAN
       ansible.builtin.debug:
         msg: |
-          Configuration du VLAN sur {{ inventory_hostname }}
+          Configuration du VLAN sur Sw02
           - VLAN ID   : {{ vlan_id }}
           - VLAN Name : {{ vlan_name }}
-          - Ports Access : {{ my_access_ports }}
-          - Ports Trunk  : {{ my_trunk_ports }}
+          - Ports Access : {{ access_ports }}
+          - Ports Trunk  : {{ trunk_ports }}
 
-    - name: Creer le VLAN sur le switch
+    - name: Creer le VLAN sur Sw02
       ansible.builtin.shell: |
         expect << 'EOF'
         set timeout 30
@@ -73,7 +69,7 @@
 
     - name: Attendre stabilisation
       ansible.builtin.pause:
-        seconds: 1
+        seconds: 2
 
     - name: Configurer les ports en mode access
       ansible.builtin.shell: |
@@ -113,9 +109,14 @@
         expect eof
         EOF
       delegate_to: localhost
-      loop: "{{ my_access_ports }}"
-      when: my_access_ports | length > 0
+      loop: "{{ access_ports }}"
+      when: access_ports | length > 0
       register: access_config
+
+    - name: Attendre stabilisation
+      ansible.builtin.pause:
+        seconds: 2
+      when: access_ports | length > 0
 
     - name: Configurer les ports en mode trunk
       ansible.builtin.shell: |
@@ -155,22 +156,22 @@
         expect eof
         EOF
       delegate_to: localhost
-      loop: "{{ my_trunk_ports }}"
-      when: my_trunk_ports | length > 0
+      loop: "{{ trunk_ports }}"
+      when: trunk_ports | length > 0
       register: trunk_config
 
     - name: Afficher le resume
       ansible.builtin.debug:
         msg: |
           ================================================================
-          Configuration VLAN terminee sur {{ inventory_hostname }}
+          Configuration VLAN terminee sur Sw02
           ================================================================
 
           VLAN {{ vlan_id }} ({{ vlan_name }}) cree avec succes
 
           Ports configures en mode Access (VLAN {{ vlan_id }}) :
-          {% if my_access_ports | length > 0 %}
-          {% for port in my_access_ports %}
+          {% if access_ports | length > 0 %}
+          {% for port in access_ports %}
           - {{ port }}
           {% endfor %}
           {% else %}
@@ -178,8 +179,8 @@
           {% endif %}
 
           Ports configures en mode Trunk (VLAN {{ vlan_id }} ajoute) :
-          {% if my_trunk_ports | length > 0 %}
-          {% for port in my_trunk_ports %}
+          {% if trunk_ports | length > 0 %}
+          {% for port in trunk_ports %}
           - {{ port }}
           {% endfor %}
           {% else %}

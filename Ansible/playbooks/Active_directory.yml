@@ -43,8 +43,8 @@
     - name: Cr�er les utilisateurs dans l'OU
       microsoft.ad.user:
         name: "{{ item.username }}"
-        sam_account_name: "{{ item.username }}"
-        upn: "{{ item.username }}@gsb.local"
+        sam_account_name: "{{ item.firstname }}.{{ item.lastname }}"
+        upn: "{{ item.firstname }}.{{ item.lastname }}@gsb.local"
         firstname: "{{ item.firstname }}"
         surname: "{{ item.lastname }}"
         password: "{{ item.password }}"
