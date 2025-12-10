@@ -10,146 +10,212 @@ resource "local_file" "private_key" {
   for_each = var.lxc_linux
 
  content  = tls_private_key.lxc_ssh_key[each.key].private_key_openssh
- filename = pathexpand("~/etc/ansible/keys/${each.value.name}")
+ filename = pathexpand("~/.ssh/${each.value.name}-ed25519")
  file_permission = "0600"
 }
 
-# Création des windows server 2019
-
-
 # Création des conteneurs LXC avec les configurations définies dans la variable lxc_linux
-resource "proxmox_lxc" "lxc_linux" {
+resource "proxmox_virtual_environment_container" "lxc_linux" {
 
   for_each = var.lxc_linux
 
-  target_node      = var.target_node
-  hostname         = each.value.name
-  vmid             = each.value.lxc_id
-  ostemplate       = var.chemin_cttemplate
-  password         = "Formation13@"
-  start            = true
-  cores            = each.value.cores
-  memory           = each.value.memory
-  ssh_public_keys  = tls_private_key.lxc_ssh_key[each.key].public_key_openssh
-  unprivileged     = true
-  nameserver       = "1.1.1.1 8.8.8.8"
+  node_name = var.target_node
+  vm_id     = each.value.lxc_id
 
-  rootfs {
-    storage = "local-lvm"
-    size    = each.value.disk_size
+  initialization {
+    hostname = each.value.name
+
+    user_account {
+      password = "Formation13@"
+      keys     = [tls_private_key.lxc_ssh_key[each.key].public_key_openssh]
+    }
+
+    ip_config {
+      ipv4 {
+        address = each.value.ipconfig0
+        gateway = each.value.gw
+      }
+    }
+
+    dns {
+      servers = ["1.1.1.1", "8.8.8.8"]
+    }
   }
 
-  network {
-   name     = "eth0"
-   bridge   = each.value.network_bridge
-   ip       = each.value.ipconfig0
-   gw       = each.value.gw
-   firewall = false
+  operating_system {
+    template_file_id = var.chemin_cttemplate
+    type            = "debian"
   }
 
+  cpu {
+    cores = each.value.cores
+  }
+
+  memory {
+    dedicated = each.value.memory
+  }
+
+  disk {
+    datastore_id = "local-lvm"
+    size         = each.value.disk_size
+  }
+
+  network_interface {
+    name    = "eth0"
+    bridge  = each.value.network_bridge
+    enabled = true
+  }
 
   features {
     nesting = true
   }
+
+  started     = true
+  unprivileged = true
 }
 
-resource "proxmox_vm_qemu" "winsrv" {
+resource "proxmox_virtual_environment_vm" "winsrv" {
 
   for_each = var.win_srv
 
   name        = each.value.name
-  vmid        = each.value.vmid
+  vm_id       = each.value.vmid
+  node_name   = var.target_node
 
-  clone       = "WinTemplate"
-  full_clone  = true
-  onboot      = true
-  agent = 1
-  agent_timeout = 300
-  bios        = "ovmf"
-  scsihw      = "virtio-scsi-single"
-  boot        = "order=scsi0;ide1"
-  target_node = var.target_node
+  clone {
+    vm_id = "2000"
+    full  = true
+  }
 
+  started = true
+  on_boot = true
 
-  memory      = 6144
+  agent {
+    enabled = true
+    timeout = "300s"
+  }
+
+  bios = "ovmf"
+
+  scsi_hardware = "virtio-scsi-single"
+
+  boot_order = ["scsi0", "ide1"]
 
   cpu {
     cores   = 6
     sockets = 1
   }
 
-  # Disque principal SCSI (slot = scsi0)
-  disk {
-    slot    = "scsi0"
-    type    = "disk"
-    storage = "local-lvm"
-    size    = "40G"
-    cache   = "writeback"
+  memory {
+    dedicated = 6144
   }
 
-  # Disque Cloud-Init (slot = ide2 ou scsi1 selon ta pratique)
+  # Disque principal SCSI
   disk {
-    slot    = "ide1"
-    type    = "cloudinit"
-    storage = "local-lvm"
+    interface    = "scsi0"
+    datastore_id = "local-lvm"
+    size         = 40
+    cache        = "writeback"
   }
 
-  network {
-    id     = 0
-    model  = "virtio"
+  network_device {
     bridge = "vmbr0"
+    model  = "virtio"
   }
 
-  serial {
-      id   = 0
-      type = "socket"
+  serial_device {}
+
+  initialization {
+    ip_config {
+      ipv4 {
+        address = each.value.ipconfig0
+        gateway = each.value.gw
+      }
     }
 
-  ipconfig0  = each.value.ipconfig0
-  nameserver = each.value.dns 
-  ciuser     = "Administrateur"
-  cipassword = "Formation13@"
-}
-
-# Clonage des VM OPNsense à partir du template OPNsenseTemplate
-
-resource "proxmox_vm_qemu" "opnsenses" {
-
-  for_each = var.opnsenses
-
-  name        = each.value.name
-  vmid        = each.value.vmid
-
-  clone       = each.value.opnsense_template
-  full_clone  = true
-  onboot      = true
-  agent       = 1
-  agent_timeout = 300
-  bios        = "seabios"
-  scsihw      = "virtio-scsi-single"
-  boot        = "order=scsi0;ide1"
-  target_node = var.target_node
-
-
-  memory      = 2048
-
-  cpu {
-    cores   = 2
-    sockets = 1
-  }
-
-  # Disque principal SCSI (slot = scsi0)
-  disk {
-    slot    = "scsi0"
-    type    = "disk"
-    storage = "local-lvm"
-    size    = "10G"
-    cache   = "writeback"
-  }
-
-  serial {
-      id   = 0
-      type = "socket"
+    dns {
+      servers = [each.value.dns]
     }
 
+    user_account {
+      username = "Administrateur"
+      password = "Formation13@"
+    }
+  }
 }
+
+# resource "proxmox_virtual_environment_vm" "opnsenses" {
+
+#   for_each = var.opnsenses
+
+#   name        = each.value.name
+#   vm_id       = each.value.vmid
+#   node_name   = var.target_node
+
+#   clone {
+#     vm_id = each.value.clone_id
+#     full  = true
+#   }
+
+#   started = true
+#   on_boot = true
+
+#   agent {
+#     enabled = true
+#     timeout = "300s"
+#   }
+
+#   bios = "seabios"
+
+#   scsi_hardware = "virtio-scsi-single"
+
+#   boot_order = ["scsi0", "ide1"]
+
+#   cpu {
+#     cores   = 2
+#     sockets = 1
+#   }
+
+#   memory {
+#     dedicated = 2048
+#   }
+
+#   # Disque principal SCSI
+#   disk {
+#     interface    = "scsi0"
+#     datastore_id = "local-lvm"
+#     size         = 10
+#     cache        = "writeback"
+#   }
+
+#   network_device {
+#     bridge = "vmbr0"
+#     model  = "virtio"
+#   }
+
+#   network_device {
+#     bridge  = "vmbr2"
+#     model   = "virtio"
+#     vlan_id = 150
+#   }
+
+#   network_device {
+#     bridge = "Sync"
+#     model  = "virtio"
+#   }
+
+#   network_device {
+#     bridge = "vmbr2"
+#     model  = "virtio"
+#   }
+
+#   serial_device {}
+
+#   initialization {
+
+#     user_account {
+#       username = "root"
+#       password = "Formation13@"
+#     }
+#   }
+# }
