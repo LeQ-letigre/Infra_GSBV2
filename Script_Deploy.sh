@@ -428,7 +428,7 @@ set -e
 echo "[+] Activation du venv Ansible..."
 source ~/venvs/ansible/bin/activate
 
-cd ../Ansible
+cd /Infra_GSBV2/Ansible
 ansible-galaxy install -r requirements.yml
 ansible-playbook Install_InfraGSB.yml
 
