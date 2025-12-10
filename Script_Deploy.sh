@@ -28,35 +28,35 @@ GITHUB_REPO="https://github.com/LeQ-letigre/Infra_GSBV2.git"
 
 # 0.5 Téléchgement des templates OpnSenses
 
-if [ ! -f /var/lib/vz/dump/opnsense-master.vma.zst ]; then
-  wget --no-check-certificate -O /var/lib/vz/dump/opnsense-master.vma.zst https://m2shelper.boisloret.fr/scripts/deploy-infra-gsb/opnsense-master.vma.zst
-fi
+# if [ ! -f /var/lib/vz/dump/opnsense-master.vma.zst ]; then
+#   wget --no-check-certificate -O /var/lib/vz/dump/opnsense-master.vma.zst https://m2shelper.boisloret.fr/scripts/deploy-infra-gsb/opnsense-master.vma.zst
+# fi
 
-if [ ! -f /var/lib/vz/dump/opnsense-backup.vma.zst ]; then
-  wget --no-check-certificate -O /var/lib/vz/dump/opnsense-backup.vma.zst https://m2shelper.boisloret.fr/scripts/deploy-infra-gsb/opnsense-backup.vma.zst
-fi
+# if [ ! -f /var/lib/vz/dump/opnsense-backup.vma.zst ]; then
+#   wget --no-check-certificate -O /var/lib/vz/dump/opnsense-backup.vma.zst https://m2shelper.boisloret.fr/scripts/deploy-infra-gsb/opnsense-backup.vma.zst
+# fi
 
-if qm status 2100 &>/dev/null; then
-    qm destroy 2100 --purge
-fi
+# if qm status 2100 &>/dev/null; then
+#     qm destroy 2100 --purge
+# fi
 
-if qm status 2101 &>/dev/null; then
-    qm destroy 2101 --purge
-fi
+# if qm status 2101 &>/dev/null; then
+#     qm destroy 2101 --purge
+# fi
 
-# 2) Restaurer les OpnSenses
-qmrestore /var/lib/vz/dump/opnsense-master.vma.zst  2100 --storage local-lvm --unique 1
-qm set 2100 --name "OpnSense-Master-Template"
+# # 2) Restaurer les OpnSenses
+# qmrestore /var/lib/vz/dump/opnsense-master.vma.zst  2100 --storage local-lvm --unique 1
+# qm set 2100 --name "OpnSense-Master-Template"
 
-# 3) Marquer en template
-qm template 2100
+# # 3) Marquer en template
+# qm template 2100
 
-# 2) Restaurer les OpnSenses
-qmrestore /var/lib/vz/dump/opnsense-backup.vma.zst  2101 --storage local-lvm --unique 1
-qm set 2101 --name "OpnSense-Backup-Template"
+# # 2) Restaurer les OpnSenses
+# qmrestore /var/lib/vz/dump/opnsense-backup.vma.zst  2101 --storage local-lvm --unique 1
+# qm set 2101 --name "OpnSense-Backup-Template"
  
-# 3) Marquer en template
-qm template 2101
+# # 3) Marquer en template
+# qm template 2101
 
 
 # 1) Télécharger la backup du win srv 2022
