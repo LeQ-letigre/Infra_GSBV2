@@ -123,7 +123,81 @@ fi
 
 PUB_KEY=$(cat "${SSH_KEY_PATH}.pub")
 
-# === 3. Création du conteneur LXC ===
+# === 3. Création des bridges réseau ===
+echo "[+] Vérification et création des bridges réseau..."
+
+# Vérifier si vmbr2 existe déjà
+if ! ip link show vmbr2 &>/dev/null; then
+  echo "[+] Création du bridge vmbr2..."
+
+  # Vérifier si la configuration existe déjà dans le fichier
+  if ! grep -q "^auto vmbr2" /etc/network/interfaces; then
+    cat >> /etc/network/interfaces <<'EOF'
+
+auto vmbr2
+iface vmbr2 inet static
+        address 10.10.0.6/28
+        bridge-ports none
+        bridge-stp off
+        bridge-fd 0
+        bridge-vlan-aware yes
+        bridge-vids 2-4094
+EOF
+    echo "[+] Configuration vmbr2 ajoutée à /etc/network/interfaces"
+  else
+    echo "[!] Configuration vmbr2 déjà présente dans /etc/network/interfaces"
+  fi
+else
+  echo "[!] Le bridge vmbr2 existe déjà"
+fi
+
+# Vérifier si le bridge Sync existe déjà
+if ! ip link show Sync &>/dev/null; then
+  echo "[+] Création du bridge Sync..."
+
+  # Vérifier si la configuration existe déjà dans le fichier
+  if ! grep -q "^auto Sync" /etc/network/interfaces; then
+    cat >> /etc/network/interfaces <<'EOF'
+
+auto Sync
+iface Sync inet manual
+        bridge-ports none
+        bridge-stp off
+        bridge-fd 0
+EOF
+    echo "[+] Configuration Sync ajoutée à /etc/network/interfaces"
+  else
+    echo "[!] Configuration Sync déjà présente dans /etc/network/interfaces"
+  fi
+else
+  echo "[!] Le bridge Sync existe déjà"
+fi
+
+# Recharger les interfaces réseau
+echo "[+] Rechargement des interfaces réseau..."
+if command -v ifreload &>/dev/null; then
+  ifreload -a
+else
+  echo "[!] ifreload non disponible, tentative avec ifup..."
+  ifup vmbr2 2>/dev/null || true
+  ifup Sync 2>/dev/null || true
+fi
+
+# Vérifier que les bridges ont bien été créés
+if ip link show vmbr2 &>/dev/null; then
+  echo "[✔] Bridge vmbr2 créé avec succès"
+  ip addr show vmbr2
+else
+  echo "[❌] Échec de la création du bridge vmbr2"
+fi
+
+if ip link show Sync &>/dev/null; then
+  echo "[✔] Bridge Sync créé avec succès"
+else
+  echo "[❌] Échec de la création du bridge Sync"
+fi
+
+# === 4. Création du conteneur LXC ===
 if pct status 110 &>/dev/null; then
   echo "[!] Le conteneur 110 existe déjà. Destruction en cours..."
   pct stop 110
@@ -147,29 +221,6 @@ pct create $CTID "$LXC_TEMPLATE" \
 echo "[+] Démarrage du conteneur..."
 pct start $CTID
 
-# 3.5 Création des bridges Linuxs 
-cat >> /etc/network/interfaces <<'EOF'
-
-auto vmbr2
-iface vmbr2 inet static
-        address 10.10.0.6/28
-        bridge-ports eno2
-        bridge-stp off
-        bridge-fd 0
-        bridge-vlan-aware yes
-        bridge-vids 2-4094
-
-auto Sync
-iface Sync inet manual
-        bridge-ports none
-        bridge-stp off
-        bridge-fd 0
-EOF
-
-echo "[+] Bridges vmbr2 et Sync configurés dans /etc/network/interfaces."
-ifreload -a
-echo "[+] Interfaces rechargées."
-
 
 # === 4. Attente que le conteneur soit up ===
 echo "[+] Attente du démarrage du conteneur..."
@@ -187,7 +238,7 @@ pct exec $CTID -- chmod 600 /root/.ssh/authorized_keys
 echo "[+] Configuration du rôle et de l'utilisateur Terraform sur Proxmox..."
 
 # Vérification/création du rôle TerraformProv
-if ! pveum role list | grep -q "^$USER_ROLE"; then
+if ! pveum role list | grep -qw "$USER_ROLE"; then
   echo "[+] Création du rôle $USER_ROLE avec les privilèges nécessaires..."
   pveum role add "$USER_ROLE" -privs "Datastore.AllocateSpace Datastore.AllocateTemplate Datastore.Audit Pool.Allocate Sys.Audit Sys.Console Sys.Modify VM.Allocate VM.Audit VM.Clone VM.Config.CDROM VM.Config.Cloudinit VM.Config.CPU VM.Config.Disk VM.Config.HWType VM.Config.Memory VM.Config.Network VM.Config.Options VM.Monitor VM.Migrate VM.PowerMgmt SDN.Use"
   echo "[+] Rôle $USER_ROLE créé avec succès."
