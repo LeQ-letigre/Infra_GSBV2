@@ -8,13 +8,16 @@
       ansible.builtin.assert:
         that:
           - ou_name is defined
-          - ad_group is defined
-        fail_msg: "Erreur : Les variables ou_name et ad_group doivent etre definies"
+          - group_name is defined
+          - block_cmd is defined
+        fail_msg: "Erreur : Les variables ou_name, group_name et block_cmd doivent etre definies"
+      when: block_cmd is defined and block_cmd == "oui"
 
     - name: Construire les variables
       ansible.builtin.set_fact:
-        gpo_name: "Block_CMD_{{ ad_group }}"
+        gpo_name: "Block_CMD_{{ group_name }}"
         ou_path: "OU={{ ou_name }},DC=gsb,DC=local"
+      when: block_cmd is defined and block_cmd == "oui"
 
     - name: Afficher les informations de la GPO
       ansible.builtin.debug:
@@ -22,7 +25,8 @@
           Creation de la GPO de blocage CMD :
           - Nom : {{ gpo_name }}
           - OU cible : {{ ou_name }}
-          - Groupe cible : {{ ad_group }}
+          - Groupe cible : {{ group_name }}
+      when: block_cmd is defined and block_cmd == "oui"
 
     - name: Creer la GPO pour bloquer le CMD
       ansible.windows.win_shell: |
@@ -32,7 +36,7 @@
         $gpoExists = Get-GPO -Name $gpoName -ErrorAction SilentlyContinue
 
         if (-not $gpoExists) {
-            $gpo = New-GPO -Name $gpoName -Comment "Blocage de l'acces au CMD pour le groupe {{ ad_group }}"
+            $gpo = New-GPO -Name $gpoName -Comment "Blocage de l'acces au CMD pour le groupe {{ group_name }}"
             Write-Output "GPO_CREATED"
         } else {
             $gpo = $gpoExists
@@ -41,17 +45,19 @@
 
         $gpo.Id.Guid
       register: gpo_creation
+      when: block_cmd is defined and block_cmd == "oui"
 
     - name: Extraire le GUID
       ansible.builtin.set_fact:
         gpo_guid: "{{ gpo_creation.stdout_lines[-1] }}"
+      when: block_cmd is defined and block_cmd == "oui"
 
     - name: Configurer la valeur de registre pour bloquer le CMD
       ansible.windows.win_shell: |
         Import-Module GroupPolicy
         Set-GPRegistryValue -Name "{{ gpo_name }}" -Key "HKCU\Software\Policies\Microsoft\Windows\System" -ValueName "DisableCMD" -Type DWord -Value 2
         Write-Output "REGISTRY_CONFIGURED"
-      register: registry_config
+      when: block_cmd is defined and block_cmd == "oui"
 
     - name: Lier la GPO a l'OU
       ansible.windows.win_shell: |
@@ -59,7 +65,9 @@
         $ouPath = "{{ ou_path }}"
         $gpoName = "{{ gpo_name }}"
 
-        $existingLinks = Get-GPInheritance -Target $ouPath | Select-Object -ExpandProperty GpoLinks | Where-Object { $_.DisplayName -eq $gpoName }
+        $existingLinks = Get-GPInheritance -Target $ouPath |
+          Select-Object -ExpandProperty GpoLinks |
+          Where-Object { $_.DisplayName -eq $gpoName }
 
         if (-not $existingLinks) {
             New-GPLink -Name $gpoName -Target $ouPath -LinkEnabled Yes | Out-Null
@@ -67,13 +75,13 @@
         } else {
             Write-Output "LINK_EXISTS"
         }
-      register: gpo_link
+      when: block_cmd is defined and block_cmd == "oui"
 
     - name: Configurer le filtrage de securite
       ansible.windows.win_shell: |
         Import-Module GroupPolicy
         $gpoName = "{{ gpo_name }}"
-        $groupName = "{{ ad_group }}"
+        $groupName = "{{ group_name }}"
 
         try {
             Set-GPPermission -Name $gpoName -TargetName 'Authenticated Users' -TargetType Group -PermissionLevel None -Replace -ErrorAction SilentlyContinue
@@ -81,26 +89,4 @@
 
         Set-GPPermission -Name $gpoName -TargetName $groupName -TargetType Group -PermissionLevel GpoApply
         Write-Output "SECURITY_FILTERING_CONFIGURED"
-      register: security_filtering
-
-    - name: Afficher le resume
-      ansible.builtin.debug:
-        msg: |
-          ================================================================
-          GPO de blocage CMD creee avec succes
-          ================================================================
-
-          GPO : {{ gpo_name }}
-          GUID : {{ gpo_guid }}
-          OU cible : {{ ou_name }}
-          Groupe cible : {{ ad_group }}
-
-          Configuration :
-          - Blocage du CMD et des scripts batch active
-          - Securite filtree sur le groupe {{ ad_group }}
-          - GPO liee a {{ ou_path }}
-
-          IMPORTANT :
-          - Les utilisateurs du groupe {{ ad_group }} devront se deconnecter/reconnecter
-          - Pour appliquer immediatement : gpupdate /force sur les postes clients
-          - Le CMD sera bloque mais PowerShell reste accessible
+      when: block_cmd is defined and block_cmd == "oui"

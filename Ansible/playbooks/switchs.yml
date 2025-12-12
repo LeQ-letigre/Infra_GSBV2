@@ -1,0 +1,56 @@
+---
+- name: Configuration VLAN Planet
+  hosts: switchs
+  gather_facts: no
+
+  vars_files:
+    - ../vars/generated_vars.yml
+
+  tasks:
+    - name: Charger les ports du switch courant
+      set_fact:
+        access_ports: "{{ switch_ports[inventory_hostname].access_ports }}"
+        trunk_ports: "{{ switch_ports[inventory_hostname].trunk_ports }}"
+
+    - name: Configurer VLAN et ports (Planet robuste)
+      ansible.builtin.shell: |
+        expect << 'EOF'
+        set timeout 90
+        log_user 1
+
+        spawn ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null {{ ansible_user }}@{{ ansible_host }}
+
+        expect "Username:"
+        send "{{ ansible_user }}\r"
+        expect "Password:"
+        send "{{ ansible_password }}\r"
+        expect -re "#|>"
+
+        send "configure\r"
+        expect -re "config|#"
+
+        send "vlan {{ vlan_id }}\r"
+        send "name {{ vlan_name }}\r"
+        send "exit\r"
+
+        {% for port in access_ports %}
+        send "interface {{ port }}\r"
+        send "switchport mode access\r"
+        send "switchport access vlan {{ vlan_id }}\r"
+        send "exit\r"
+        {% endfor %}
+
+        {% for port in trunk_ports %}
+        send "interface {{ port }}\r"
+        send "switchport mode trunk\r"
+        send "switchport trunk allowed vlan add {{ vlan_id }}\r"
+        send "exit\r"
+        {% endfor %}
+
+        send "exit\r"
+        send "write memory\r"
+        send "exit\r"
+        expect eof
+        EOF
+      delegate_to: localhost
+      changed_when: true

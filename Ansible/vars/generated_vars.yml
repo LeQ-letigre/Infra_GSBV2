@@ -1,0 +1,47 @@
+ou_name: "IT"
+group_name: "g_it"
+ou_path: "DC=gsb,DC=local"
+folder_name: "D_IT"
+drive_letter: "D"
+block_cmd: "non"
+
+vlan_id: 62
+vlan_name: "IT"
+
+id_vif: "62"
+ip_vif: "192.168.62.254/24"
+dhcp_start: "192.168.62.50"
+dhcp_stop: "192.168.62.200"
+dhcp_gateway: "192.168.62.254"
+dhcp_dns: "172.16.0.3"
+
+firewall_rule: "oui"
+vlan_source: "62"
+vlan_dest: "10"
+service: "http"
+description: "Bloquer HTTP du VLAN IT vers VLAN Admin"
+
+users:
+  - firstname: "Quentin"
+    lastname: "Magnan"
+    username: "quentin.magnan"
+    password: "Formation13@"
+  - firstname: "Driss"
+    lastname: "Test"
+    username: "driss.test"
+    password: "Formation13@"
+
+domains:
+  - "amazon.fr"
+
+switch_ports:
+  Sw01:
+    access_ports:
+      - "gi9"
+    trunk_ports:
+      - "gi2"
+  Sw02:
+    access_ports:
+      - "gi8"
+    trunk_ports:
+      - "gi9"

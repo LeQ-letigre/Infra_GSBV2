@@ -1,0 +1,27 @@
+---
+# Playbook orchestrateur qui exécute tout dans le bon ordre
+# Utilise le fichier vars/generated_vars.yml déjà existant
+
+- name: Configuration Active Directory
+  import_playbook: playbooks/Active_directory.yml
+
+- name: Création de répertoires AD
+  import_playbook: playbooks/dir_create_ad.yml
+
+- name: Mappage de lecteur
+  import_playbook: playbooks/mappage_lecteur.yml
+
+- name: Blocage CMD
+  import_playbook: playbooks/blocage_cmd.yml
+
+- name: Blocage de domaines AdGuard
+  import_playbook: playbooks/bloquer_domaines_adguard.yml
+
+- name: Configuration du pare-feu
+  import_playbook: playbooks/parefeu.yml
+
+- name: Configuration VIF/DHCP routeur
+  import_playbook: playbooks/Vif_dhcp_routeur.yml
+
+- name: Configuration des switchs
+  import_playbook: playbooks/switchs.yml

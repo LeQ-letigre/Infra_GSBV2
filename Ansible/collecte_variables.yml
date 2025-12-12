@@ -1,0 +1,371 @@
+---
+- name: Déploiement E6 - Collecte interactive globale
+  hosts: localhost
+  gather_facts: no
+
+  vars:
+    ou_path: "DC=gsb,DC=local"
+    switches:
+      - Sw01
+      - Sw02
+
+  ##################################################################
+  # QUESTIONS GLOBALES
+  ##################################################################
+  vars_prompt:
+    - name: ou_name
+      prompt: "Nom de l'Unité d'Organisation (OU)"
+      private: no
+
+    - name: group_name
+      prompt: "Nom du groupe à créer dans l'OU"
+      private: no
+
+    - name: user_count
+      prompt: "Combien d'utilisateurs veux-tu créer ?"
+      private: no
+
+    - name: folder_name
+      prompt: "Nom du dossier a creer et partager (ex: Comptabilite)"
+      private: no
+
+    - name: drive_letter
+      prompt: "Lettre de lecteur a utiliser pour le mappage (D-Z)"
+      private: no
+
+    - name: block_cmd
+      prompt: "Veux-tu bloquer l'acces au CMD ? (oui/non)"
+      private: no
+
+    - name: domain_count
+      prompt: "Combien de domaines veux-tu bloquer ?"
+      private: no
+
+    - name: id_vif
+      prompt: "ID de la VIF"
+      private: no
+
+    - name: ip_vif
+      prompt: "Adresse IP de la VIF"
+      private: no
+
+    - name: dhcp_start
+      prompt: "Debut de plage DHCP"
+      private: no
+
+    - name: dhcp_stop
+      prompt: "Fin de plage DHCP"
+      private: no
+
+    - name: dhcp_gateway
+      prompt: "Passerelle DHCP"
+      private: no
+
+    - name: dhcp_dns
+      prompt: "DNS DHCP"
+      private: no
+
+    - name: vlan_id
+      prompt: "ID du VLAN"
+      private: no
+
+    - name: vlan_name
+      prompt: "Nom du VLAN"
+      private: no
+
+    - name: firewall_rule
+      prompt: "Veux-tu créer une règle de pare-feu ? (oui/non)"
+      private: no
+
+  tasks:
+    ##################################################################
+    # PARE-FEU - QUESTIONS CONDITIONNELLES
+    ##################################################################
+    - name: Collecter les informations de pare-feu si nécessaire
+      block:
+        - name: Demander le VLAN source
+          ansible.builtin.pause:
+            prompt: "VLAN source pour la règle de pare-feu (ex: 62)"
+          register: fw_vlan_source
+
+        - name: Demander le VLAN destination
+          ansible.builtin.pause:
+            prompt: "VLAN destination pour la règle de pare-feu (ex: 10)"
+          register: fw_vlan_dest
+
+        - name: Demander le service
+          ansible.builtin.pause:
+            prompt: "Service à bloquer (ex: http, https, ssh, all)"
+          register: fw_service
+
+        - name: Demander la description
+          ansible.builtin.pause:
+            prompt: "Description de la règle de pare-feu"
+          register: fw_description
+
+        - name: Enregistrer les variables de pare-feu
+          ansible.builtin.set_fact:
+            vlan_source: "{{ fw_vlan_source.user_input | trim }}"
+            vlan_dest: "{{ fw_vlan_dest.user_input | trim }}"
+            firewall_service: "{{ fw_service.user_input | trim }}"
+            firewall_description: "{{ fw_description.user_input | trim }}"
+      when: firewall_rule == "oui"
+
+    - name: Initialiser les variables de pare-feu vides si non utilisées
+      ansible.builtin.set_fact:
+        vlan_source: ""
+        vlan_dest: ""
+        firewall_service: ""
+        firewall_description: ""
+      when: firewall_rule != "oui"
+
+
+    ##################################################################
+    # USERS AD
+    ##################################################################
+    - name: Initialiser la liste des utilisateurs
+      ansible.builtin.set_fact:
+        users: []
+
+    - name: Collecter les informations utilisateurs
+      ansible.builtin.pause:
+        prompt: "Utilisateur {{ item }} - Format: prenom,nom,username,motdepasse"
+      loop: "{{ range(1, user_count | int + 1) | list }}"
+      register: collected_users
+
+    - name: Construire la liste des utilisateurs
+      ansible.builtin.set_fact:
+        users: "{{ users + [new_user] }}"
+      vars:
+        parts: "{{ item.user_input.split(',') }}"
+        new_user:
+          firstname: "{{ parts[0] | trim }}"
+          lastname: "{{ parts[1] | trim }}"
+          username: "{{ parts[2] | trim }}"
+          password: "{{ parts[3] | trim }}"
+      loop: "{{ collected_users.results }}"
+
+    ##################################################################
+    # DOMAINES ADGUARD
+    ##################################################################
+    - name: Initialiser la liste des domaines
+      ansible.builtin.set_fact:
+        domains: []
+
+    - name: Collecter les domaines à bloquer
+      ansible.builtin.pause:
+        prompt: "Domaine {{ item }} à bloquer"
+      loop: "{{ range(1, domain_count | int + 1) | list }}"
+      register: collected_domains
+
+    - name: Construire la liste des domaines
+      ansible.builtin.set_fact:
+        domains: "{{ domains + [item.user_input | trim] }}"
+      loop: "{{ collected_domains.results }}"
+
+    ##################################################################
+    # SWITCHS - PORTS INTERACTIFS PAR SWITCH
+    ##################################################################
+    - name: Initialiser la structure switch_ports
+      ansible.builtin.set_fact:
+        switch_ports: {}
+
+    - name: Traiter Switch Sw01
+      block:
+        - name: Collecter le nombre de ports ACCESS pour Sw01
+          ansible.builtin.pause:
+            prompt: "Switch Sw01 - Combien de ports ACCESS ?"
+          register: sw01_access_count
+
+        - name: Collecter le nombre de ports TRUNK pour Sw01
+          ansible.builtin.pause:
+            prompt: "Switch Sw01 - Combien de ports TRUNK ?"
+          register: sw01_trunk_count
+
+        - name: Initialiser les listes de ports Sw01
+          ansible.builtin.set_fact:
+            sw01_access_ports: []
+            sw01_trunk_ports: []
+
+        - name: Collecter les ports ACCESS pour Sw01
+          ansible.builtin.pause:
+            prompt: "Port ACCESS {{ port_num }} pour Sw01 (ex: g1)"
+          loop: "{{ range(1, sw01_access_count.user_input | int + 1) | list }}"
+          loop_control:
+            loop_var: port_num
+          register: sw01_access_raw
+          when: sw01_access_count.user_input | int > 0
+
+        - name: Construire la liste des ports ACCESS Sw01
+          ansible.builtin.set_fact:
+            sw01_access_ports: "{{ sw01_access_ports + [port.user_input | trim] }}"
+          loop: "{{ sw01_access_raw.results }}"
+          loop_control:
+            loop_var: port
+          when: sw01_access_count.user_input | int > 0
+
+        - name: Collecter les ports TRUNK pour Sw01
+          ansible.builtin.pause:
+            prompt: "Port TRUNK {{ port_num }} pour Sw01 (ex: g24)"
+          loop: "{{ range(1, sw01_trunk_count.user_input | int + 1) | list }}"
+          loop_control:
+            loop_var: port_num
+          register: sw01_trunk_raw
+          when: sw01_trunk_count.user_input | int > 0
+
+        - name: Construire la liste des ports TRUNK Sw01
+          ansible.builtin.set_fact:
+            sw01_trunk_ports: "{{ sw01_trunk_ports + [port.user_input | trim] }}"
+          loop: "{{ sw01_trunk_raw.results }}"
+          loop_control:
+            loop_var: port
+          when: sw01_trunk_count.user_input | int > 0
+
+        - name: Ajouter Sw01 à la structure globale
+          ansible.builtin.set_fact:
+            switch_ports: "{{ switch_ports | combine({'Sw01': {'access_ports': sw01_access_ports, 'trunk_ports': sw01_trunk_ports}}) }}"
+
+    - name: Traiter Switch Sw02
+      block:
+        - name: Collecter le nombre de ports ACCESS pour Sw02
+          ansible.builtin.pause:
+            prompt: "Switch Sw02 - Combien de ports ACCESS ?"
+          register: sw02_access_count
+
+        - name: Collecter le nombre de ports TRUNK pour Sw02
+          ansible.builtin.pause:
+            prompt: "Switch Sw02 - Combien de ports TRUNK ?"
+          register: sw02_trunk_count
+
+        - name: Initialiser les listes de ports Sw02
+          ansible.builtin.set_fact:
+            sw02_access_ports: []
+            sw02_trunk_ports: []
+
+        - name: Collecter les ports ACCESS pour Sw02
+          ansible.builtin.pause:
+            prompt: "Port ACCESS {{ port_num }} pour Sw02 (ex: g1)"
+          loop: "{{ range(1, sw02_access_count.user_input | int + 1) | list }}"
+          loop_control:
+            loop_var: port_num
+          register: sw02_access_raw
+          when: sw02_access_count.user_input | int > 0
+
+        - name: Construire la liste des ports ACCESS Sw02
+          ansible.builtin.set_fact:
+            sw02_access_ports: "{{ sw02_access_ports + [port.user_input | trim] }}"
+          loop: "{{ sw02_access_raw.results }}"
+          loop_control:
+            loop_var: port
+          when: sw02_access_count.user_input | int > 0
+
+        - name: Collecter les ports TRUNK pour Sw02
+          ansible.builtin.pause:
+            prompt: "Port TRUNK {{ port_num }} pour Sw02 (ex: g24)"
+          loop: "{{ range(1, sw02_trunk_count.user_input | int + 1) | list }}"
+          loop_control:
+            loop_var: port_num
+          register: sw02_trunk_raw
+          when: sw02_trunk_count.user_input | int > 0
+
+        - name: Construire la liste des ports TRUNK Sw02
+          ansible.builtin.set_fact:
+            sw02_trunk_ports: "{{ sw02_trunk_ports + [port.user_input | trim] }}"
+          loop: "{{ sw02_trunk_raw.results }}"
+          loop_control:
+            loop_var: port
+          when: sw02_trunk_count.user_input | int > 0
+
+        - name: Ajouter Sw02 à la structure globale
+          ansible.builtin.set_fact:
+            switch_ports: "{{ switch_ports | combine({'Sw02': {'access_ports': sw02_access_ports, 'trunk_ports': sw02_trunk_ports}}) }}"
+
+    ##################################################################
+    # GENERATION DU FICHIER FINAL
+    ##################################################################
+    - name: Construire le contenu du fichier de variables
+      ansible.builtin.set_fact:
+        vars_content: |
+          ou_name: "{{ ou_name }}"
+          group_name: "{{ group_name }}"
+          ou_path: "{{ ou_path }}"
+          folder_name: "{{ folder_name }}"
+          drive_letter: "{{ drive_letter }}"
+          block_cmd: "{{ block_cmd }}"
+
+          vlan_id: {{ vlan_id }}
+          vlan_name: "{{ vlan_name }}"
+
+          id_vif: "{{ id_vif }}"
+          ip_vif: "{{ ip_vif }}"
+          dhcp_start: "{{ dhcp_start }}"
+          dhcp_stop: "{{ dhcp_stop }}"
+          dhcp_gateway: "{{ dhcp_gateway }}"
+          dhcp_dns: "{{ dhcp_dns }}"
+
+          firewall_rule: "{{ firewall_rule }}"
+          {% if firewall_rule == "oui" %}
+          vlan_source: "{{ vlan_source }}"
+          vlan_dest: "{{ vlan_dest }}"
+          service: "{{ firewall_service }}"
+          description: "{{ firewall_description }}"
+          {% endif %}
+
+          users:
+          {% for u in users %}
+            - firstname: "{{ u.firstname }}"
+              lastname: "{{ u.lastname }}"
+              username: "{{ u.username }}"
+              password: "{{ u.password }}"
+          {% endfor %}
+
+          domains:
+          {% for d in domains %}
+            - "{{ d }}"
+          {% endfor %}
+
+          switch_ports:
+          {% for sw_name, ports in switch_ports.items() %}
+            {{ sw_name }}:
+              access_ports:
+          {% for p in ports.access_ports %}
+                - "{{ p }}"
+          {% endfor %}
+              trunk_ports:
+          {% for p in ports.trunk_ports %}
+                - "{{ p }}"
+          {% endfor %}
+          {% endfor %}
+
+    - name: Créer le répertoire vars si nécessaire
+      ansible.builtin.file:
+        path: vars
+        state: directory
+        mode: '0755'
+
+    - name: Écrire le fichier vars/generated_vars.yml
+      ansible.builtin.copy:
+        dest: vars/generated_vars.yml
+        content: "{{ vars_content }}"
+        mode: '0644'
+
+    - name: Afficher confirmation
+      ansible.builtin.debug:
+        msg:
+          - "====================================="
+          - "✅ Fichier généré: vars/generated_vars.yml"
+          - "====================================="
+          - "📊 Résumé de la collecte:"
+          - "   - {{ users | length }} utilisateur(s) créé(s)"
+          - "   - {{ domains | length }} domaine(s) à bloquer"
+          - "   - {{ switches | length }} switch(s) configuré(s)"
+          - "====================================="
+          - ""
+          - "🚀 Prochaine étape:"
+          - "   Exécuter: ansible-playbook Ansible/run_all.yml"
+          - ""
+          - "   Ou exécuter les playbooks individuellement:"
+          - "   - ansible-playbook Ansible/playbooks/Active_directory.yml"
+          - "   - ansible-playbook Ansible/playbooks/switchs.yml"
+          - "   - etc."
+          - "====================================="

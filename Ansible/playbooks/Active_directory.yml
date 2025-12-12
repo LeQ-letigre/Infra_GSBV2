@@ -3,63 +3,50 @@
   hosts: WinSRV01
   gather_facts: no
 
+  vars_files:
+    - ../vars/generated_vars.yml
+
   tasks:
-    - name: V�rifier que les variables sont d�finies
+    - name: Vérifier que les variables sont définies
       ansible.builtin.assert:
         that:
           - ou_name is defined
           - group_name is defined
+          - ou_path is defined
           - users is defined
-        fail_msg: "Erreur : Les variables ou_name, group_name et users doivent �tre d�finies"
+          - users | length > 0
+        fail_msg: "Variables manquantes (OU, groupe ou users)."
 
-    - name: Parser users si c'est une string JSON
-      ansible.builtin.set_fact:
-        users_list: "{{ users if users is not string else users | from_json }}"
-
-    - name: Cr�er l'Unit� d'Organisation (OU)
+    - name: Créer l'Unité d'Organisation (OU)
       microsoft.ad.ou:
         name: "{{ ou_name }}"
-        path: "{{ ou_path | default('DC=gsb,DC=local') }}"
+        path: "{{ ou_path }}"
         state: present
-      register: ou_result
 
-    - name: Afficher le r�sultat de cr�ation de l'OU
-      ansible.builtin.debug:
-        msg: "OU '{{ ou_name }}' cr��e avec succ�s"
-
-    - name: Cr�er le groupe dans l'OU
+    - name: Créer le groupe dans l'OU
       microsoft.ad.group:
         name: "{{ group_name }}"
-        path: "OU={{ ou_name }},{{ ou_path | default('DC=gsb,DC=local') }}"
+        path: "OU={{ ou_name }},{{ ou_path }}"
         scope: global
         category: security
         state: present
-      register: group_result
 
-    - name: Afficher le r�sultat de cr�ation du groupe
-      ansible.builtin.debug:
-        msg: "Groupe '{{ group_name }}' cr�� dans l'OU '{{ ou_name }}'"
-
-    - name: Cr�er les utilisateurs dans l'OU
+    - name: Créer les utilisateurs dans l'OU
       microsoft.ad.user:
         name: "{{ item.username }}"
-        sam_account_name: "{{ item.firstname }}.{{ item.lastname }}"
-        upn: "{{ item.firstname }}.{{ item.lastname }}@gsb.local"
+        sam_account_name: "{{ item.username }}"
+        upn: "{{ item.username }}@gsb.local"
         firstname: "{{ item.firstname }}"
         surname: "{{ item.lastname }}"
         password: "{{ item.password }}"
-        state: present
         enabled: yes
-        path: "OU={{ ou_name }},{{ ou_path | default('DC=gsb,DC=local') }}"
+        path: "OU={{ ou_name }},{{ ou_path }}"
         groups:
           add:
             - "{{ group_name }}"
-        password_never_expires: no
-        user_cannot_change_password: no
         update_password: on_create
-      loop: "{{ users_list }}"
-      register: users_result
+      loop: "{{ users }}"
 
-    - name: Afficher le r�sum� de la cr�ation des utilisateurs
+    - name: Résumé
       ansible.builtin.debug:
-        msg: "{{ users_list | length }} utilisateur(s) cr��(s) dans le groupe '{{ group_name }}'"
+        msg: "{{ users | length }} utilisateur(s) créé(s) dans l'OU '{{ ou_name }}'"

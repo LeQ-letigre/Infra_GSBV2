@@ -3,13 +3,16 @@
   hosts: WinSRV01
   gather_facts: no
 
+  vars_files:
+    - ../vars/generated_vars.yml
+
   tasks:
     - name: Verifier que les variables sont definies
       ansible.builtin.assert:
         that:
           - folder_name is defined
-          - ad_group is defined
-        fail_msg: "Erreur : Les variables folder_name et ad_group doivent etre definies"
+          - group_name is defined
+        fail_msg: "Erreur : Les variables folder_name et group_name doivent etre definies"
 
     - name: "Creer le dossier sur C:"
       ansible.windows.win_file:
@@ -27,7 +30,7 @@
         path: "C:\\{{ folder_name }}"
         state: present
         full: Administrateur
-        change: "{{ ad_group }}"
+        change: "{{ group_name }}"
         description: "Partage gere par Ansible"
       register: share_result
 
@@ -38,7 +41,7 @@
     - name: Configurer les permissions NTFS sur le dossier
       ansible.windows.win_acl:
         path: "C:\\{{ folder_name }}"
-        user: "{{ ad_group }}"
+        user: "{{ group_name }}"
         rights: Modify,Read,Write,Delete,ReadAndExecute,ListDirectory
         type: allow
         state: present
@@ -48,4 +51,4 @@
 
     - name: Afficher le resume des permissions
       ansible.builtin.debug:
-        msg: "Permissions de modification accordees au groupe '{{ ad_group }}' sur C:\\{{ folder_name }}"
+        msg: "Permissions de modification accordees au groupe '{{ group_name }}' sur C:\\{{ folder_name }}"

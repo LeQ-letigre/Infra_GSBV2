@@ -1,25 +1,23 @@
----
 - name: Bloquer des domaines dans AdGuard Home
   hosts: Adguard
   gather_facts: yes
 
+  vars_files:
+    - ../vars/generated_vars.yml
+
   tasks:
-    - name: Verifier que la variable domains est definie
+    - name: Verifier que la liste des domaines est definie
       ansible.builtin.assert:
         that:
           - domains is defined
           - domains | length > 0
-        fail_msg: "Erreur : La variable 'domains' doit etre definie et contenir au moins un domaine"
-
-    - name: Parser domains si c'est une string JSON
-      ansible.builtin.set_fact:
-        domains_list: "{{ domains if domains is not string else domains | from_json }}"
+        fail_msg: "Erreur : la variable domains est absente ou vide"
 
     - name: Afficher les domaines a bloquer
       ansible.builtin.debug:
         msg: |
-          Ajout de {{ domains_list | length }} domaine(s) a la liste de blocage :
-          {{ domains_list | join(', ') }}
+          Ajout de {{ domains | length }} domaine(s) a la liste de blocage :
+          {{ domains | join(', ') }}
 
     - name: Verifier si le fichier de configuration existe
       ansible.builtin.stat:
@@ -28,7 +26,7 @@
 
     - name: Echouer si le fichier de configuration n'existe pas
       ansible.builtin.fail:
-        msg: "Le fichier de configuration AdGuard n'existe pas. AdGuard Home n'est peut-etre pas installe."
+        msg: "Le fichier de configuration AdGuard n'existe pas"
       when: not config_file.stat.exists
 
     - name: Creer une sauvegarde de la configuration actuelle
@@ -38,47 +36,36 @@
         remote_src: yes
         mode: '0600'
 
-    - name: Ajouter chaque domaine a la section blocked_hosts
+    - name: Ajouter les domaines a la section blocked_hosts
       ansible.builtin.lineinfile:
         path: /opt/AdGuardHome/AdGuardHome.yaml
         insertafter: '^  blocked_hosts:'
         line: "    - {{ item }}"
         state: present
-      loop: "{{ domains_list }}"
+      loop: "{{ domains }}"
       register: domains_added
 
-    - name: Redemarrer AdGuard Home pour appliquer les changements
+    - name: Redemarrer AdGuard Home si necessaire
       ansible.builtin.systemd:
         name: AdGuardHome
         state: restarted
       when: domains_added is changed
 
-    - name: Attendre que AdGuard Home redemarre
+    - name: Attendre le redemarrage d'AdGuard
       ansible.builtin.wait_for:
         port: 53
         delay: 2
         timeout: 30
       when: domains_added is changed
 
-    - name: Afficher le resume
+    - name: Resume
       ansible.builtin.debug:
         msg: |
           ================================================================
-          Blocage de Domaines AdGuard - Termine avec Succes
+          Blocage de domaines AdGuard termine
           ================================================================
 
-          Informations :
-          - Nombre de domaines ajoutes   : {{ domains_list | length }}
-          - Configuration sauvegardee    : /opt/AdGuardHome/AdGuardHome.yaml.backup.{{ ansible_date_time.epoch }}
-          - Service AdGuard              : {{ 'Redemarre' if domains_added is changed else 'Inchange' }}
-
-          Domaines nouvellement bloques :
-          {% for domain in domains_list %}
-          - {{ domain }}
+          Domaines bloques :
+          {% for d in domains %}
+          - {{ d }}
           {% endfor %}
-
-          Les domaines sont maintenant bloques par le DNS AdGuard (172.16.0.3)
-
-          Pour verifier :
-          - Interface web : http://172.16.0.3:8080
-          - Tester le blocage : nslookup <domaine> 172.16.0.3

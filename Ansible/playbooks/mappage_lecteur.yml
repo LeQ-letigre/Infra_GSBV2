@@ -3,6 +3,9 @@
   hosts: WinSRV01
   gather_facts: no
 
+  vars_files:
+    - ../vars/generated_vars.yml
+
   tasks:
     - name: Vérifier que les variables sont définies
       ansible.builtin.assert:

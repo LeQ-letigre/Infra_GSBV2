@@ -2,7 +2,10 @@
 - name: Configurer une VIF sur EdgeRouter
   hosts: routeur
   gather_facts: no
-  
+
+  vars_files:
+    - ../vars/generated_vars.yml
+
   tasks:
     - name: Vérifier que les variables sont définies
       ansible.builtin.assert:

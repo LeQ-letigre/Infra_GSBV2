@@ -319,7 +319,7 @@ python3 -m venv ~/venvs/ansible
 echo "📦 Activation du venv et installation des dépendances Ansible + WinRM..."
 source ~/venvs/ansible/bin/activate
 pip install --upgrade pip
-pip install ansible "pywinrm[credssp]" requests-ntlm
+pip install ansible "pywinrm[credssp]" requests-ntlm paramiko
 
 echo "🔗 Ajout d’un alias global dans ~/.bashrc pour ansible et ansible-playbook"
 if ! grep -q "venvs/ansible" ~/.bashrc; then
