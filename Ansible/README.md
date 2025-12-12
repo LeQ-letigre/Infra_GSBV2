@@ -6,8 +6,8 @@ Ce projet Ansible permet de déployer automatiquement toute l'infrastructure GSB
 
 ## 📋 Fichiers principaux
 
-- **`epreuve.yml`** : Playbook interactif de collecte de données
-- **`run_all.yml`** : Playbook orchestrateur qui exécute tout automatiquement
+- **`collecte_variables.yml`** : Playbook interactif de collecte de données
+- **`epreuve_E6.yml`** : Playbook orchestrateur qui exécute tout automatiquement
 - **`playbooks/`** : Playbooks individuels pour chaque composant
 - **`vars/generated_vars.yml`** : Fichier généré automatiquement avec toutes les variables
 
@@ -20,7 +20,7 @@ Ce projet Ansible permet de déployer automatiquement toute l'infrastructure GSB
 source ~/venvs/ansible/bin/activate
 
 # Lance le déploiement complet
-ansible-playbook Ansible/run_all.yml
+ansible-playbook Ansible/epreuve_E6.yml
 ```
 
 Cette commande va :
@@ -32,7 +32,7 @@ Cette commande va :
 
 **Étape 1 : Collecte des données**
 ```bash
-ansible-playbook Ansible/epreuve.yml
+ansible-playbook Ansible/collecte_variables.yml
 ```
 
 **Étape 2 : Exécution manuelle des playbooks**
@@ -85,8 +85,8 @@ Pour chaque switch (Sw01, Sw02) :
 
 ```
 Ansible/
-├── epreuve.yml                      # Collecte interactive
-├── run_all.yml                      # Orchestrateur principal
+├── collecte_variables.yml           # Collecte interactive
+├── epreuve_E6.yml                   # Orchestrateur principal
 ├── README.md                        # Ce fichier
 ├── playbooks/                       # Playbooks individuels
 │   ├── Active_directory.yml
@@ -104,19 +104,19 @@ Ansible/
 ## ⚠️ Important
 
 - Ne modifiez **jamais** manuellement le fichier `vars/generated_vars.yml`
-- Relancez `epreuve.yml` pour régénérer les variables
+- Relancez `collecte_variables.yml` pour régénérer les variables
 - Tous les playbooks chargent automatiquement `generated_vars.yml`
 
 ## 🔧 Dépannage
 
 ### Erreur "vars/generated_vars.yml not found"
-→ Lancez d'abord `ansible-playbook Ansible/epreuve.yml`
+→ Lancez d'abord `ansible-playbook Ansible/collecte_variables.yml`
 
 ### Erreur de connexion aux hosts
 → Vérifiez votre inventaire et les connexions SSH/WinRM
 
 ### Variables manquantes
-→ Relancez `epreuve.yml` pour recollecte les données
+→ Relancez `collecte_variables.yml` pour recollecte les données
 
 ## 📊 Exemple de vars/generated_vars.yml
 

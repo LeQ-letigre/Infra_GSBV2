@@ -436,7 +436,7 @@
           - "====================================="
           - ""
           - "🚀 Prochaine étape:"
-          - "   Exécuter: ansible-playbook Ansible/run_all.yml"
+          - "   Exécuter: ansible-playbook Ansible/epreuve_E6.yml"
           - ""
           - "   Ou exécuter les playbooks individuellement:"
           - "   - ansible-playbook Ansible/playbooks/Active_directory.yml"
