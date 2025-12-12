@@ -22,6 +22,14 @@ vlan_dest: "300,400"
 service: "ssh"
 description: "Blocage ssh 110 vers VLANs 300 et 400"
 
+nat_rule: "oui"
+nat_description: "HTTPS VLAN Marketing vers GLPI"
+nat_source_network: "192.168.150.0/27"
+nat_destination_ip: "192.168.150.30"
+nat_destination_port: "8443"
+nat_forward_to_ip: "172.16.0.5"
+nat_forward_to_port: "443"
+
 users:
   - firstname: "Julien"
     lastname: "BENOIT"
