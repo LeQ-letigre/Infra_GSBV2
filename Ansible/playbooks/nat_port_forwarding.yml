@@ -1,0 +1,105 @@
+---
+- name: Configuration du port forwarding (DNAT) sur EdgeRouter
+  hosts: routeur
+  gather_facts: no
+
+  vars_files:
+    - ../vars/generated_vars.yml
+
+  tasks:
+    - name: Verifier si une règle NAT doit être créée
+      ansible.builtin.debug:
+        msg: "Aucune règle NAT à créer (nat_rule = {{ nat_rule | default('non') }})"
+      when: nat_rule is not defined or nat_rule != "oui"
+
+    - name: Configuration du port forwarding
+      block:
+        - name: Verifier que les variables sont definies
+          ansible.builtin.assert:
+            that:
+              - nat_description is defined
+              - nat_source_network is defined
+              - nat_destination_ip is defined
+              - nat_destination_port is defined
+              - nat_forward_to_ip is defined
+              - nat_forward_to_port is defined
+            fail_msg: "Erreur : Toutes les variables NAT doivent être définies"
+
+        - name: Afficher les informations de la règle NAT
+          ansible.builtin.debug:
+            msg: |
+              Configuration NAT Port Forwarding :
+              - Description : {{ nat_description }}
+              - Réseau source : {{ nat_source_network }}
+              - Destination : {{ nat_destination_ip }}:{{ nat_destination_port }}
+              - Redirection vers : {{ nat_forward_to_ip }}:{{ nat_forward_to_port }}
+
+        - name: Recuperer les regles NAT existantes
+          vyos.vyos.vyos_command:
+            commands:
+              - show nat statistics
+          register: nat_output
+
+        - name: Afficher la sortie de show nat statistics
+          ansible.builtin.debug:
+            var: nat_output.stdout[0]
+
+        - name: Extraire le dernier numero de regle NAT (type DST)
+          ansible.builtin.set_fact:
+            last_nat_rule: "{{ nat_output.stdout[0] | regex_findall('^(\\d+)\\s+\\d+\\s+DST', multiline=True) | map('int') | max | default(0) }}"
+
+        - name: Afficher le dernier numero de regle detecte
+          ansible.builtin.debug:
+            msg: "Dernier numero de regle NAT detecte : {{ last_nat_rule }}"
+
+        - name: Calculer le nouveau numero de regle NAT
+          ansible.builtin.set_fact:
+            new_nat_rule: "{{ (last_nat_rule | int + 1) }}"
+
+        - name: Afficher le numero de regle
+          ansible.builtin.debug:
+            msg: "Creation de la regle NAT numero {{ new_nat_rule }}"
+
+        - name: Creer la regle de port forwarding (DNAT)
+          vyos.vyos.vyos_command:
+            commands:
+              - configure
+              - set service nat rule {{ new_nat_rule }} description "{{ nat_description }}"
+              - set service nat rule {{ new_nat_rule }} source address {{ nat_source_network }}
+              - set service nat rule {{ new_nat_rule }} destination address {{ nat_destination_ip }}
+              - set service nat rule {{ new_nat_rule }} destination port {{ nat_destination_port }}
+              - set service nat rule {{ new_nat_rule }} inbound-interface {{ nat_inbound_interface | default('eth1') }}
+              - set service nat rule {{ new_nat_rule }} protocol tcp
+              - set service nat rule {{ new_nat_rule }} type destination
+              - set service nat rule {{ new_nat_rule }} inside-address address {{ nat_forward_to_ip }}
+              - set service nat rule {{ new_nat_rule }} inside-address port {{ nat_forward_to_port }}
+              - commit
+              - save
+              - exit
+          register: nat_creation
+
+        - name: Afficher la sortie de la creation de la regle NAT
+          ansible.builtin.debug:
+            var: nat_creation
+
+        - name: Afficher le resume
+          ansible.builtin.debug:
+            msg: |
+              ================================================================
+              Regle NAT de port forwarding creee avec succes
+              ================================================================
+
+              Numero de regle : {{ new_nat_rule }}
+              Description : {{ nat_description }}
+
+              Configuration :
+              - Reseau source : {{ nat_source_network }}
+              - Point d'entree : {{ nat_destination_ip }}:{{ nat_destination_port }}
+              - Redirection vers : {{ nat_forward_to_ip }}:{{ nat_forward_to_port }}
+              - Interface entrant : {{ nat_inbound_interface | default('eth1') }}
+              - Protocole : TCP
+
+              Les utilisateurs du reseau {{ nat_source_network }} peuvent maintenant
+              acceder a {{ nat_forward_to_ip }}:{{ nat_forward_to_port }} via {{ nat_destination_ip }}:{{ nat_destination_port }}
+
+      when: nat_rule is defined and nat_rule == "oui"

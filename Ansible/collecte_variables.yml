@@ -81,6 +81,10 @@
       prompt: "Veux-tu créer une règle de pare-feu ? (oui/non)"
       private: no
 
+    - name: nat_rule
+      prompt: "Veux-tu créer une règle de redirection de port (NAT) ? (oui/non)"
+      private: no
+
   tasks:
     ##################################################################
     # PARE-FEU - QUESTIONS CONDITIONNELLES
@@ -122,6 +126,61 @@
         firewall_service: ""
         firewall_description: ""
       when: firewall_rule != "oui"
+
+    ##################################################################
+    # NAT PORT FORWARDING - QUESTIONS CONDITIONNELLES
+    ##################################################################
+    - name: Collecter les informations de port forwarding si nécessaire
+      block:
+        - name: Demander la description de la règle NAT
+          ansible.builtin.pause:
+            prompt: "Description de la règle NAT (ex: RDP VLAN IT)"
+          register: nat_desc
+
+        - name: Demander le réseau source
+          ansible.builtin.pause:
+            prompt: "Réseau source (ex: 192.168.110.0/27)"
+          register: nat_src_net
+
+        - name: Demander l'IP de destination (point d'entrée)
+          ansible.builtin.pause:
+            prompt: "IP de destination - point d'entrée (ex: 192.168.110.30)"
+          register: nat_dest_ip
+
+        - name: Demander le port de destination
+          ansible.builtin.pause:
+            prompt: "Port de destination - port d'écoute (ex: 33389)"
+          register: nat_dest_port
+
+        - name: Demander l'IP de redirection
+          ansible.builtin.pause:
+            prompt: "IP vers laquelle rediriger (ex: 172.16.0.1)"
+          register: nat_fwd_ip
+
+        - name: Demander le port de redirection
+          ansible.builtin.pause:
+            prompt: "Port vers lequel rediriger (ex: 3389)"
+          register: nat_fwd_port
+
+        - name: Enregistrer les variables de NAT
+          ansible.builtin.set_fact:
+            nat_description: "{{ nat_desc.user_input | trim }}"
+            nat_source_network: "{{ nat_src_net.user_input | trim }}"
+            nat_destination_ip: "{{ nat_dest_ip.user_input | trim }}"
+            nat_destination_port: "{{ nat_dest_port.user_input | trim }}"
+            nat_forward_to_ip: "{{ nat_fwd_ip.user_input | trim }}"
+            nat_forward_to_port: "{{ nat_fwd_port.user_input | trim }}"
+      when: nat_rule == "oui"
+
+    - name: Initialiser les variables NAT vides si non utilisées
+      ansible.builtin.set_fact:
+        nat_description: ""
+        nat_source_network: ""
+        nat_destination_ip: ""
+        nat_destination_port: ""
+        nat_forward_to_ip: ""
+        nat_forward_to_port: ""
+      when: nat_rule != "oui"
 
 
     ##################################################################
@@ -314,6 +373,16 @@
           vlan_dest: "{{ vlan_dest }}"
           service: "{{ firewall_service }}"
           description: "{{ firewall_description }}"
+          {% endif %}
+
+          nat_rule: "{{ nat_rule }}"
+          {% if nat_rule == "oui" %}
+          nat_description: "{{ nat_description }}"
+          nat_source_network: "{{ nat_source_network }}"
+          nat_destination_ip: "{{ nat_destination_ip }}"
+          nat_destination_port: "{{ nat_destination_port }}"
+          nat_forward_to_ip: "{{ nat_forward_to_ip }}"
+          nat_forward_to_port: "{{ nat_forward_to_port }}"
           {% endif %}
 
           users:
